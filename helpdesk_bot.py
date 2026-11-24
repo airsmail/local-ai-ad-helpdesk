@@ -53,6 +53,9 @@ KORUMALI_HESAPLAR = {"administrator", "admin", "krbtgt", "guest", "root"}
 
 def ad_guvenli_islem(aksiyon, kullanici_adi, gonderen_mail):
     """Sadece izinli AD komutlarını, Admin koruması ve kimlik doğrulamasıyla çalıştırır."""
+    if not re.match(r"^[a-zA-Z0-9._-]+$", kullanici_adi):
+        return f"REDDEDİLDİ: Geçersiz kullanıcı adı formatı ({kullanici_adi})."
+
     if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", gonderen_mail):
         return f"REDDEDİLDİ: Geçersiz e-posta formatı ({gonderen_mail})."
 
