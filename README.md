@@ -19,3 +19,11 @@ graph LR
     F --> D
     D -->|SMTP Resolution| A
     
+Key Features
+100% Local & Private: Powered by local Ollama instances (Qwen 2.5 Coder, Hermes 3, Llama 3) and self-hosted SwarmChat. No cloud AI APIs or per-token costs.
+
+Security First (Whitelisted AD Actions): LLMs are never given raw PowerShell execution rights. The Access Agent outputs a structured intent (ACTION: UNLOCK_USER | USER: <username>), which is strictly regex-validated by Python before triggering predefined, safe Active Directory cmdlets over WinRM (NTLM).
+
+Real-Time Observability: All inter-agent communication, triage decisions, and AD execution logs are streamed live to the #helpdesk channel in SwarmChat.
+
+End-to-End Email Loop: Monitors unread emails with TICKET in the subject line and automatically replies with a user-friendly resolution summary.
