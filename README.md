@@ -63,7 +63,8 @@ python3 helpdesk_bot.py
 
 ## Live Demo
 
-*<img width="1307" height="865" alt="image" src="https://github.com/user-attachments/assets/7615e3b8-8083-4af3-9754-4c902abe7040" />
+*<img width="1307" height="865" alt="image" src="https://github.com/user-attachments/assets/ed180ec2-bcce-4455-8ae6-bd6bfadac507" />
+
 *
 
 ## Built With
