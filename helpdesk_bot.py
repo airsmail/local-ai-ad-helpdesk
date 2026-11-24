@@ -49,30 +49,48 @@ def ollama_sor(url, model, sistem_rolu, mesaj, max_token=350):
     resp.raise_for_status()
     return resp.json()["message"]["content"].strip()
 
-def ad_guvenli_islem(aksiyon, kullanici_adi):
-    """Sadece izinli (whitelisted) AD komutlarını güvenli şekilde çalıştırır."""
-    # Komut enjeksiyonunu önlemek için sadece alfanümerik, nokta, tire ve alt çizgiye izin ver
+KORUMALI_HESAPLAR = {"administrator", "admin", "krbtgt", "guest", "root"}
+
+def ad_guvenli_islem(aksiyon, kullanici_adi, gonderen_mail):
+    """Sadece izinli AD komutlarını, Admin koruması ve kimlik doğrulamasıyla çalıştırır."""
     if not re.match(r"^[a-zA-Z0-9._-]+$", kullanici_adi):
-        return f"HATA: Geçersiz kullanıcı adı formatı ({kullanici_adi})."
+        return f"REDDEDİLDİ: Geçersiz kullanıcı adı formatı ({kullanici_adi})."
+
+    # 1. Katman: Statik Kara Liste Kontrolü
+    if kullanici_adi.lower() in KORUMALI_HESAPLAR:
+        return "REDDEDİLDİ: Ayrıcalıklı (Admin/Sistem) hesaplar üzerinde otomasyon işlemi yapılamaz."
 
     session = winrm.Session(DC_IP, auth=(DC_USER, DC_PASS), transport="ntlm")
     prefix = "$ProgressPreference = 'SilentlyContinue'; Import-Module ActiveDirectory; "
 
+    # 2. Katman: Dinamik AD AdminCount (Tier-0) ve E-posta Eşleştirme Kontrolü
+    # Not: Sadece kendi hesabına işlem yapabilsin (Lab testleri için STRICT_EMAIL_CHECK=false yapılabilir)
+    strict_check = os.getenv("STRICT_EMAIL_CHECK", "true").lower() == "true"
+    
+    guvenlik_kontrolu = (
+        f"$u = Get-ADUser -Identity '{kullanici_adi}' -Properties LockedOut, PasswordExpired, AdminCount, EmailAddress -ErrorAction Stop; "
+        f"if ($u.AdminCount -eq 1) {{ Write-Output 'REDDEDILDI: Korumali yonetici (Tier-0) hesabi.'; exit 0 }}; "
+    )
+
+    if strict_check:
+        guvenlik_kontrolu += (
+            f"if ($u.EmailAddress -ne '{gonderen_mail}' -and $u.UserPrincipalName -ne '{gonderen_mail}') "
+            f"{{ Write-Output 'REDDEDILDI: Talep gonderen e-posta ile hedef AD hesabi eslesmiyor.'; exit 0 }}; "
+        )
+
     if aksiyon == "UNLOCK_USER":
         ps_cmd = (
-            f"{prefix}"
-            f"$u = Get-ADUser -Identity '{kullanici_adi}' -Properties LockedOut -ErrorAction Stop; "
+            f"{prefix}{guvenlik_kontrolu}"
             f"if ($u.LockedOut) {{ Unlock-ADAccount -Identity '{kullanici_adi}'; Write-Output 'BASARILI: {kullanici_adi} hesabinin kilidi acildi.' }} "
             f"else {{ Write-Output 'BILGI: {kullanici_adi} hesabi zaten kilitli degil (Enabled: ' + $u.Enabled + ').' }}"
         )
     elif aksiyon == "CHECK_USER":
         ps_cmd = (
-            f"{prefix}"
-            f"Get-ADUser -Identity '{kullanici_adi}' -Properties LockedOut, PasswordExpired | "
-            f"Select-Object SamAccountName, Enabled, LockedOut, PasswordExpired | Format-List | Out-String"
+            f"{prefix}{guvenlik_kontrolu}"
+            f"$u | Select-Object SamAccountName, Enabled, LockedOut, PasswordExpired | Format-List | Out-String"
         )
     else:
-        return "BILGI: Otomatik AD aksiyonu gerekmiyor, manuel prosedür önerildi."
+        return "BILGI: Otomatik AD aksiyonu gerekmiyor."
 
     sonuc = session.run_ps(ps_cmd)
     if sonuc.status_code == 0:
@@ -168,7 +186,7 @@ while True:
                 if eslesme:
                     aksiyon, hedef_user = eslesme.group(1), eslesme.group(2)
                     print(f"⚙️ DC üzerinde güvenli işlem çalıştırılıyor: {aksiyon} -> {hedef_user}")
-                    ad_sonuc = ad_guvenli_islem(aksiyon, hedef_user)
+                    ad_sonuc = ad_guvenli_islem(aksiyon, hedef_user, t["gonderen"])  
                 
                 uzman_ozet = f"🔐 **Erişim Uzmanı (Hermes 3):**\n{hermes_yanit}\n\n🖥️ **DC İşlem Sonucu:**\n{ad_sonuc or 'Aksiyon tetiklenmedi.'}"
                 erisim_agent.send(chat=KANAL, text=uzman_ozet)
